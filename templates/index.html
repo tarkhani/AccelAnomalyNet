@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Data Dashboard</title>
+  <script>
+    window.__plotlyLoadFailed = false;
+  </script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" onerror="window.__plotlyLoadFailed=true"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --accent2: #a78bfa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top left, #1e293b, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .layout {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+    .card {
+      background: linear-gradient(170deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+    }
+    h1 { margin: 0 0 8px; font-size: 1.45rem; }
+    .meta { color: var(--muted); margin: 0 0 12px; }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      background: var(--card);
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 12px;
+    }
+    .metric .label { color: var(--muted); font-size: 0.8rem; }
+    .metric .value { font-size: 1.1rem; margin-top: 6px; }
+    .metric .value.anomaly-good { color: #6ee7b7; }
+    .metric .value.anomaly-bad { color: #f87171; font-weight: 600; }
+    .metric .value.anomaly-warm { color: #fcd34d; }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+    .chart-panel {
+      min-height: 220px;
+      height: 260px;
+    }
+    .chart-panel.chart-combined {
+      grid-column: 1 / -1;
+      min-height: 280px;
+      height: 320px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    .reset-btn {
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .reset-btn:hover {
+      border-color: rgba(148, 163, 184, 0.8);
+      background: rgba(30, 41, 59, 0.9);
+    }
+    .hint {
+      margin-top: 10px;
+      color: #fbbf24;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .hint.show { display: block; }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+    }
+    .dot.live {
+      background: #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+    }
+    .debug-wrap {
+      margin-top: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      overflow: hidden;
+    }
+    .debug-wrap.has-errors {
+      border-color: rgba(248, 113, 113, 0.55);
+    }
+    .debug-wrap summary {
+      cursor: pointer;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      user-select: none;
+      list-style-position: outside;
+    }
+    .debug-wrap pre {
+      margin: 0;
+      padding: 10px 12px;
+      max-height: 200px;
+      overflow: auto;
+      font-size: 11px;
+      line-height: 1.45;
+      font-family: ui-monospace, Consolas, monospace;
+      background: rgba(0, 0, 0, 0.35);
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .debug-wrap .debug-toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 0 12px 10px;
+    }
+    .debug-wrap .debug-toolbar button {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.8);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .debug-wrap .debug-toolbar button:hover {
+      border-color: rgba(148, 163, 184, 0.7);
+    }
+    .debug-line-info { color: #94a3b8; }
+    .debug-line-warn { color: #fcd34d; }
+    .debug-line-error { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <section class="card">
+      <h1>Live Stream Dashboard</h1>
+      <p class="meta">Subscribe to your backend data stream and visualize it in real time.</p>
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <div class="toolbar">
+        <button id="resetBtn" class="reset-btn" type="button">Reset Dashboard</button>
+      </div>
+      <div id="hintText" class="hint">No data yet. Waiting for stream or polling updates...</div>
+      <details id="debugPanel" class="debug-wrap">
+        <summary id="debugSummary">Debug log (no issues yet)</summary>
+        <pre id="debugLogPre" aria-live="polite"></pre>
+        <div class="debug-toolbar">
+          <button type="button" id="debugClearBtn">Clear log</button>
+          <button type="button" id="debugCopyBtn">Copy log</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="row">
+      <div class="metric">
+        <div class="label">Number of Samples Received</div>
+        <div id="countValue" class="value">0</div>
+      </div>
+      <div class="metric">
+        <div class="label">Statistical range (server, |z| ≤ 3σ)</div>
+        <div id="rangeStatus" class="value">—</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="charts-grid">
+        <div id="chartX" class="chart-panel" aria-label="Accelerometer X"></div>
+        <div id="chartY" class="chart-panel" aria-label="Accelerometer Y"></div>
+        <div id="chartZ" class="chart-panel" aria-label="Accelerometer Z"></div>
+        <div id="chartCombined" class="chart-panel chart-combined" aria-label="Accelerometer X Y Z combined"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const WINDOW_SECONDS = 120;
+    const timestamps = [];
+    const values = [];
+    /** Timestamps aligned 1:1 with ax/ay/az (only points that include accel). */
+    const tsAccel = [];
+    const axValues = [];
+    const ayValues = [];
+    const azValues = [];
+
+    const countValue = document.getElementById("countValue");
+    const rangeStatus = document.getElementById("rangeStatus");
+    /** Latest server-side anomaly payload from the most recent point (if any). */
+    let lastAnomalyMeta = null;
+    const dot = document.getElementById("dot");
+    const statusText = document.getElementById("statusText");
+    const hintText = document.getElementById("hintText");
+    const resetBtn = document.getElementById("resetBtn");
+    const debugPanel = document.getElementById("debugPanel");
+    const debugLogPre = document.getElementById("debugLogPre");
+    const debugSummary = document.getElementById("debugSummary");
+    const debugClearBtn = document.getElementById("debugClearBtn");
+    const debugCopyBtn = document.getElementById("debugCopyBtn");
+    let pollTimer = null;
+    let chartRedrawRaf = null;
+    /** True if the last successful GET /data returned at least one row (used to skip duplicate first SSE snapshot). */
+    let initialHttpHadRows = false;
+    /** Set in `connect` only. First `bulk` from the stream: `skip` duplicates GET / `resync` if HTTP had no rows. */
+    let nextSseFirstBulk = null;
+    /** Set in `onerror` only. Next `bulk` should replace the chart (reconnected /stream; server sends a full snapshot first). */
+    let sseResyncOnNextBulk = false;
+    /** Full page reload after each new SSE bulk after the first (workaround when live Plot/SSE append misbehaves). Resets each navigation. */
+    let sseBulkMsgCount = 0;
+    let debugErrorCount = 0;
+    let debugWarnCount = 0;
+    let badTimestampLogRemaining = 5;
+
+    const MAX_DEBUG_LINES = 45;
+
+    function updateDebugSummary() {
+      if (!debugSummary) return;
+      const parts = [];
+      if (debugErrorCount) parts.push(`${debugErrorCount} error(s)`);
+      if (debugWarnCount) parts.push(`${debugWarnCount} warning(s)`);
+      debugSummary.textContent =
+        parts.length === 0 ? "Debug log (no issues yet)" : `Debug log — ${parts.join(", ")} — expand for details`;
+    }
+
+    /**
+     * @param {"info"|"warn"|"error"} level
+     * @param {string} message
+     * @param {unknown} [detail]
+     */
+    function debugLog(level, message, detail) {
+      if (!debugLogPre) return;
+      if (level === "error") debugErrorCount += 1;
+      if (level === "warn") debugWarnCount += 1;
+      updateDebugSummary();
+      if (debugPanel) {
+        if (level === "error") {
+          debugPanel.classList.add("has-errors");
+          debugPanel.open = true;
+        }
+      }
+
+      const t = new Date().toISOString().slice(11, 23);
+      let extra = "";
+      if (detail !== undefined && detail !== null) {
+        if (typeof detail === "string") {
+          extra = detail.length > 480 ? `${detail.slice(0, 480)}…` : detail;
+        } else if (detail instanceof Error) {
+          extra = detail.stack || detail.message;
+        } else {
+          try {
+            const s = JSON.stringify(detail);
+            extra = s.length > 400 ? `${s.slice(0, 400)}…` : s;
+          } catch (_e) {
+            extra = String(detail);
+          }
+        }
+      }
+      const block = extra ? `[${t}] [${level}] ${message}\n  ${extra}` : `[${t}] [${level}] ${message}`;
+      const lines = (debugLogPre.textContent ? `${debugLogPre.textContent}\n${block}` : block)
+        .trim()
+        .split("\n");
+      debugLogPre.textContent = lines.slice(-MAX_DEBUG_LINES).join("\n");
+      debugLogPre.scrollTop = debugLogPre.scrollHeight;
+    }
+
+    if (debugClearBtn && debugLogPre) {
+      debugClearBtn.addEventListener("click", () => {
+        debugLogPre.textContent = "";
+        debugErrorCount = 0;
+        debugWarnCount = 0;
+        badTimestampLogRemaining = 5;
+        if (debugPanel) debugPanel.classList.remove("has-errors");
+        updateDebugSummary();
+      });
+    }
+    if (debugCopyBtn && debugLogPre) {
+      debugCopyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(debugLogPre.textContent || "");
+          debugLog("info", "Debug log copied to clipboard");
+        } catch (e) {
+          debugLog("warn", "Clipboard copy failed", e);
+        }
+      });
+    }
+
+    window.addEventListener("error", (ev) => {
+      const where = ev.filename ? `${ev.filename}:${ev.lineno}:${ev.colno}` : "";
+      debugLog("error", ev.message || "window error", where || ev.error);
+    });
+    window.addEventListener("unhandledrejection", (ev) => {
+      const r = ev.reason;
+      debugLog("error", "Unhandled promise rejection", r instanceof Error ? r : String(r));
+    });
+
+    try {
+      if (new URLSearchParams(window.location.search).get("debug") === "1" && debugPanel) {
+        debugPanel.open = true;
+        debugLog("info", "Verbose debug: ?debug=1 is set");
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+
+    function scheduleChartRedraw() {
+      if (typeof Plotly === "undefined") return;
+      if (chartRedrawRaf != null) return;
+      chartRedrawRaf = requestAnimationFrame(() => {
+        chartRedrawRaf = null;
+        drawChart();
+      });
+    }
+
+    /** Push one row into buffers; returns false if timestamp invalid. Does not redraw. */
+    function pushPointData(point) {
+      const tsMs = Date.parse(point.timestamp);
+      if (!Number.isFinite(tsMs)) {
+        if (badTimestampLogRemaining > 0) {
+          badTimestampLogRemaining -= 1;
+          debugLog("warn", "Skipped point: timestamp not parseable by Date.parse()", {
+            timestamp: point.timestamp,
+            sample: JSON.stringify(point).slice(0, 200)
+          });
+        }
+        return false;
+      }
+      timestamps.push(point.timestamp);
+      values.push(Number(point.value));
+      if (point.ax !== undefined && point.ay !== undefined && point.az !== undefined) {
+        tsAccel.push(point.timestamp);
+        axValues.push(Number(point.ax));
+        ayValues.push(Number(point.ay));
+        azValues.push(Number(point.az));
+      }
+      if (Object.prototype.hasOwnProperty.call(point, "anomaly_ready")) {
+        lastAnomalyMeta = {
+          anomaly: !!point.anomaly,
+          anomaly_ready: !!point.anomaly_ready,
+          z_score: point.z_score != null ? Number(point.z_score) : null,
+          normal_lower: point.normal_lower != null ? Number(point.normal_lower) : null,
+          normal_upper: point.normal_upper != null ? Number(point.normal_upper) : null,
+        };
+      }
+      if (values.length > 2000) {
+        values.shift();
+        timestamps.shift();
+      }
+      if (axValues.length > 2000) {
+        tsAccel.shift();
+        axValues.shift();
+        ayValues.shift();
+        azValues.shift();
+      }
+      return true;
+    }
+
+    function xaxisForSeries(timeSeries) {
+      const xaxisConfig = {
+        title: "Time",
+        type: "date",
+        gridcolor: "rgba(148,163,184,0.2)",
+        autorange: true
+      };
+      if (timeSeries.length > 1) {
+        const lastMs = Date.parse(timeSeries[timeSeries.length - 1]);
+        if (Number.isFinite(lastMs)) {
+          xaxisConfig.autorange = false;
+          xaxisConfig.range = [
+            new Date(lastMs - WINDOW_SECONDS * 1000).toISOString(),
+            new Date(lastMs).toISOString()
+          ];
+        }
+      }
+      return xaxisConfig;
+    }
+
+    function cloneXaxis(cfg) {
+      const c = { ...cfg };
+      if (Array.isArray(cfg.range)) {
+        c.range = [...cfg.range];
+      }
+      return c;
+    }
+
+    const plotlyBaseLayout = {
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      margin: { t: 36, b: 44, l: 52, r: 16 },
+      font: { color: "#e5e7eb", size: 11 },
+      showlegend: true,
+      legend: { orientation: "h", yanchor: "bottom", y: 1.02, x: 0 }
+    };
+
+    function drawChart() {
+      if (typeof Plotly === "undefined") {
+        return;
+      }
+      try {
+      const t = tsAccel.length > 0 ? tsAccel : timestamps;
+      const xaxisRaw = xaxisForSeries(t);
+      const lineShape = axValues.length > 400 ? "linear" : "spline";
+      function traceLine(color, width) {
+        const L = { color, width, shape: lineShape };
+        if (lineShape === "spline") L.smoothing = 0.5;
+        return L;
+      }
+
+      const emptyTrace = {
+        x: [],
+        y: [],
+        mode: "lines",
+        line: { width: 2 }
+      };
+
+      Plotly.react(
+        "chartX",
+        axValues.length
+          ? [{ x: tsAccel, y: axValues, mode: "lines", line: traceLine("#a78bfa", 2), name: "Ax (g)" }]
+          : [{ ...emptyTrace, name: "Ax (g)", line: { color: "#a78bfa" } }],
+        {
+          ...plotlyBaseLayout,
+          title: { text: "Accelerometer X", font: { size: 14, color: "#e5e7eb" } },
+          xaxis: { ...cloneXaxis(xaxisRaw), title: "Time" },
+          yaxis: { title: "g", gridcolor: "rgba(148,163,184,0.2)", autorange: true }
+        },
+        { responsive: true, displaylogo: false }
+      );
+
+      Plotly.react(
+        "chartY",
+        ayValues.length
+          ? [{ x: tsAccel, y: ayValues, mode: "lines", line: traceLine("#f472b6", 2), name: "Ay (g)" }]
+          : [{ ...emptyTrace, name: "Ay (g)", line: { color: "#f472b6" } }],
+        {
+          ...plotlyBaseLayout,
+          title: { text: "Accelerometer Y", font: { size: 14, color: "#e5e7eb" } },
+          xaxis: { ...cloneXaxis(xaxisRaw), title: "Time" },
+          yaxis: { title: "g", gridcolor: "rgba(148,163,184,0.2)", autorange: true }
+        },
+        { responsive: true, displaylogo: false }
+      );
+
+      Plotly.react(
+        "chartZ",
+        azValues.length
+          ? [{ x: tsAccel, y: azValues, mode: "lines", line: traceLine("#34d399", 2), name: "Az (g)" }]
+          : [{ ...emptyTrace, name: "Az (g)", line: { color: "#34d399" } }],
+        {
+          ...plotlyBaseLayout,
+          title: { text: "Accelerometer Z", font: { size: 14, color: "#e5e7eb" } },
+          xaxis: { ...cloneXaxis(xaxisRaw), title: "Time" },
+          yaxis: { title: "g", gridcolor: "rgba(148,163,184,0.2)", autorange: true }
+        },
+        { responsive: true, displaylogo: false }
+      );
+
+      const combinedTraces =
+        axValues.length > 0
+          ? [
+              { x: tsAccel, y: axValues, mode: "lines", line: { color: "#a78bfa", width: 1.8 }, name: "Ax" },
+              { x: tsAccel, y: ayValues, mode: "lines", line: { color: "#f472b6", width: 1.8 }, name: "Ay" },
+              { x: tsAccel, y: azValues, mode: "lines", line: { color: "#34d399", width: 1.8 }, name: "Az" }
+            ]
+          : [
+              { ...emptyTrace, name: "Ax", line: { color: "#a78bfa" } },
+              { ...emptyTrace, name: "Ay", line: { color: "#f472b6" } },
+              { ...emptyTrace, name: "Az", line: { color: "#34d399" } }
+            ];
+
+      Plotly.react(
+        "chartCombined",
+        combinedTraces,
+        {
+          ...plotlyBaseLayout,
+          title: { text: "X + Y + Z (combined)", font: { size: 14, color: "#e5e7eb" } },
+          xaxis: { ...cloneXaxis(xaxisRaw), title: "Time" },
+          yaxis: { title: "g", gridcolor: "rgba(148,163,184,0.2)", autorange: true }
+        },
+        { responsive: true, displaylogo: false }
+      );
+      } catch (e) {
+        debugLog("error", "Plotly.react failed while drawing charts", e);
+      }
+    }
+
+    function applyAnomalyStyling() {
+      if (rangeStatus) {
+        rangeStatus.classList.remove("anomaly-good", "anomaly-bad", "anomaly-warm");
+      }
+      if (!rangeStatus) return;
+      if (!lastAnomalyMeta) {
+        rangeStatus.textContent = "—";
+        return;
+      }
+      if (!lastAnomalyMeta.anomaly_ready) {
+        rangeStatus.textContent = "Gathering baseline…";
+        rangeStatus.classList.add("anomaly-warm");
+        return;
+      }
+      if (lastAnomalyMeta.anomaly) {
+        const z = lastAnomalyMeta.z_score;
+        const zText = z != null && Number.isFinite(z) ? z.toFixed(2) : "?";
+        rangeStatus.textContent = `Outside band (z = ${zText})`;
+        rangeStatus.classList.add("anomaly-bad");
+      } else {
+        rangeStatus.textContent = "Within normal band";
+        rangeStatus.classList.add("anomaly-good");
+      }
+    }
+
+    function updateMetrics() {
+      const count = values.length;
+      countValue.textContent = String(count);
+      hintText.classList.toggle("show", count === 0);
+      if (count === 0) {
+        lastAnomalyMeta = null;
+        applyAnomalyStyling();
+        return;
+      }
+      applyAnomalyStyling();
+    }
+
+    function appendPoint(point) {
+      if (!pushPointData(point)) return;
+      updateMetrics();
+      scheduleChartRedraw();
+    }
+
+    function clearSeries() {
+      timestamps.length = 0;
+      values.length = 0;
+      tsAccel.length = 0;
+      axValues.length = 0;
+      ayValues.length = 0;
+      azValues.length = 0;
+      lastAnomalyMeta = null;
+      updateMetrics();
+      drawChart();
+    }
+
+    async function loadInitialData() {
+      initialHttpHadRows = false;
+      try {
+        const res = await fetch("/data", { cache: "no-store" });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          debugLog("warn", `GET /data failed: HTTP ${res.status}`, body.slice(0, 400));
+          return;
+        }
+        const rows = await res.json();
+        if (!Array.isArray(rows)) {
+          debugLog("warn", "GET /data: response is not a JSON array", typeof rows);
+          return;
+        }
+        clearSeries();
+        for (const row of rows) {
+          pushPointData(row);
+        }
+        initialHttpHadRows = rows.length > 0;
+        updateMetrics();
+        drawChart();
+      } catch (err) {
+        debugLog("error", "GET /data threw (network or parse)", err);
+        initialHttpHadRows = false;
+      }
+    }
+
+    function startPollingFallback() {
+      if (pollTimer) return;
+      pollTimer = setInterval(loadInitialData, 3000);
+      statusText.textContent = "Stream unavailable, polling /data...";
+    }
+
+    /** Stops 3s GET polling once we know the EventSource is actually delivering data. */
+    function stopPollingFallback() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+      statusText.textContent = "Connected";
+      dot.classList.add("live");
+    }
+
+    function connect() {
+      const stream = new EventSource("/stream");
+      // `connect` runs only once per page. Prime first-bulk handling even if a message arrives before `onopen`.
+      nextSseFirstBulk = initialHttpHadRows ? "skip" : "resync";
+
+      stream.onopen = () => {
+        // Do not clear the /data poller here: "open" can happen before any data is received (or a half-dead
+        // connection can open and never stream). Stopping the poller on onopen used to leave no working path
+        // until a full page refresh. Polling is cleared in onmessage when the first event arrives.
+        // Do NOT set nextSseFirstBulk from here: a second onopen (browser quirk, proxy, auto-reconnect) is not
+        // the same as a new /stream, but it used to mark the *next* 50-pt MQTT batch as a full "resync",
+        // clearing the series so incremental data never appeared to grow until a full page reload.
+        dot.classList.add("live");
+        statusText.textContent = "Connected";
+      };
+
+      stream.onmessage = (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch (e) {
+          debugLog("warn", "SSE: invalid JSON in message", {
+            err: String(e),
+            dataPreview: String(event.data).slice(0, 240)
+          });
+          return;
+        }
+        if (msg.type === "bulk" && Array.isArray(msg.payload)) {
+          stopPollingFallback();
+          sseBulkMsgCount += 1;
+          if (sseBulkMsgCount > 1) {
+            location.reload();
+            return;
+          }
+          if (nextSseFirstBulk) {
+            const action = nextSseFirstBulk;
+            nextSseFirstBulk = null;
+            if (action === "skip") {
+              sseResyncOnNextBulk = false;
+              return;
+            }
+            clearSeries();
+            for (const row of msg.payload) {
+              pushPointData(row);
+            }
+            updateMetrics();
+            scheduleChartRedraw();
+            sseResyncOnNextBulk = false;
+            return;
+          }
+          if (sseResyncOnNextBulk) {
+            sseResyncOnNextBulk = false;
+            clearSeries();
+            for (const row of msg.payload) {
+              pushPointData(row);
+            }
+            updateMetrics();
+            scheduleChartRedraw();
+            return;
+          }
+          for (const row of msg.payload) {
+            pushPointData(row);
+          }
+          updateMetrics();
+          scheduleChartRedraw();
+          return;
+        }
+        if (msg.type === "point" && msg.payload) {
+          stopPollingFallback();
+          appendPoint(msg.payload);
+          return;
+        }
+        if (msg.type === "reset") {
+          stopPollingFallback();
+          clearSeries();
+        }
+      };
+
+      stream.onerror = () => {
+        dot.classList.remove("live");
+        statusText.textContent = "Reconnecting...";
+        // After a real drop, the next successful /stream will send a full `data` snapshot; replace local series.
+        sseResyncOnNextBulk = true;
+        debugLog("warn", "EventSource error (connection lost or blocked; retrying / polling)");
+        startPollingFallback();
+      };
+    }
+
+    if (typeof Plotly === "undefined" || window.__plotlyLoadFailed) {
+      statusText.textContent = "Plotly failed to load (check network / ad blocker)";
+      debugLog(
+        "error",
+        "Plotly library not available",
+        window.__plotlyLoadFailed ? "script tag reported onerror (CDN blocked or failed)" : "typeof Plotly is undefined"
+      );
+    } else {
+      drawChart();
+    }
+    void (async () => {
+      try {
+        await loadInitialData();
+      } finally {
+        connect();
+      }
+    })();
+
+    resetBtn.addEventListener("click", async () => {
+      resetBtn.disabled = true;
+      try {
+        const res = await fetch("/reset", { method: "POST" });
+        if (!res.ok) {
+          throw new Error("Reset failed");
+        }
+        clearSeries();
+      } catch (err) {
+        statusText.textContent = "Reset failed";
+        debugLog("error", "POST /reset failed", err);
+      } finally {
+        resetBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
