@@ -15,14 +15,14 @@ PWR_MGMT_1 = 0x6B
 ACCEL_XOUT_H = 0x3B
 
 # === CONFIG ===
-SSID = "Ahmadreza's iPhone"
-PASSWORD = "Artorias1376!"
+SSID = "YOUR_WIFI_SSID"
+PASSWORD = "YOUR_WIFI_PASSWORD"
 
 MQTT_TOPIC = b"iotproject/accelerometer"
-MQTT_SERVER = "606be9cdd83841ab8aa160b075157595.s1.eu.hivemq.cloud"
+MQTT_SERVER = "your-mqtt-broker.example.com"
 MQTT_PORT = 8883
-MQTT_USER = "tarkhani"
-MQTT_PASSWORD = "Artorias1376!"
+MQTT_USER = "your-mqtt-username"
+MQTT_PASSWORD = "your-mqtt-password"
 
 
 # === I2C + MPU6050 ===

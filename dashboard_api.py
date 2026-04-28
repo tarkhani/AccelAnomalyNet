@@ -19,11 +19,11 @@ from pydantic import BaseModel, Field
 app = FastAPI(title="Live Data Dashboard API", version="1.0.0")
 
 # Student project defaults (env vars override when set).
-_DEFAULT_MQTT_HOST = "606be9cdd83841ab8aa160b075157595.s1.eu.hivemq.cloud"
+_DEFAULT_MQTT_HOST = "your-mqtt-broker.example.com"
 _DEFAULT_MQTT_PORT = 8883
 _DEFAULT_MQTT_TOPIC = "iotproject/accelerometer"
-_DEFAULT_MQTT_USER = "tarkhani"
-_DEFAULT_MQTT_PASSWORD = "Artorias1376!"
+_DEFAULT_MQTT_USER = "your-mqtt-username"
+_DEFAULT_MQTT_PASSWORD = "your-mqtt-password"
 
 # If device clock is unsynced (common on Pico without NTP), timestamps can be years off.
 # When the first sample in a batch is farther than this from server UTC, re-anchor to "now"
